@@ -5,7 +5,7 @@ This repository contains a collection of Start Menu tweaks and tools, along with
 ## Repository Contents
 
 - **StartMenuTweaks**: A collection of files and settings for customizing the Windows Start Menu.
-- **DownloadAndInstallTweaks.ps1**: A PowerShell script that downloads the latest Start Menu tweaks and installs the HP Image Assistant.
+- **wgetStartMenus.lookmomnohands**: A PowerShell script that downloads the latest Start Menu tweaks and installs the HP Image Assistant.
 
 ## Getting Started
 
@@ -18,7 +18,7 @@ This repository contains a collection of Start Menu tweaks and tools, along with
 
 1. **Clone the Repository or Download the ZIP File**:
    - ```bash
-     git clone https://github.com/yourusername/StartMenuTweaks.git
+     git clone https://github.com/lookmomnohands/laughing-chainsaw.git
      ```
    
 2. **Navigate to the Directory**:
@@ -27,7 +27,7 @@ This repository contains a collection of Start Menu tweaks and tools, along with
      ```
 
 3. **Run the PowerShell Script as Administrator**:
-   - Right-click on `DownloadAndInstallTweaks.ps1` and select **Run with PowerShell**.
+   - Right-click on `wgetStartMenus.ps1` and select **Run with PowerShell**.
    - The script will:
      - Download the latest ZIP containing Start Menu tweaks.
      - Extract the contents to `C:\`.
@@ -36,7 +36,7 @@ This repository contains a collection of Start Menu tweaks and tools, along with
 
 ### Usage
 
-To run the script automatically as SYSTEM, create a task in **Task Scheduler** with the `DownloadAndInstallTweaks.ps1` script, ensuring the following settings:
+To run the script automatically as SYSTEM, create a task in **Task Scheduler** with the `wgetStartMenus.lookmomnohands` script, ensuring the following settings:
 - **Run with highest privileges**
 - **Trigger** according to your preference (e.g., at startup).
 
