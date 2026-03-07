@@ -5,7 +5,7 @@ This repository contains a collection of Start Menu tweaks and tools, along with
 ## Repository Contents
 
 - **StartMenuTweaks**: A collection of files and settings for customizing the Windows Start Menu.
-- **wgetStartMenus.lookmomnohands**: A PowerShell script that downloads the latest Start Menu tweaks and installs the HP Image Assistant.
+- **wgetStartMenus.ps1**: A PowerShell script that downloads the latest Start Menu tweaks and installs the HP Image Assistant.
 
 ## Getting Started
 
