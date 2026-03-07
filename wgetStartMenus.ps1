@@ -43,11 +43,30 @@ catch {
     exit
 }
 
+# Function to count files in the GitHub repo (using GitHub API)
+function Get-GitHubFileCount {
+    $apiUrl = "https://api.github.com/repos/lookmomnohands/laughing-chainsaw/git/trees/main?recursive=1"
+    try {
+        $response = Invoke-WebRequest -Uri $apiUrl -Headers @{ "User-Agent" = "Mozilla/5.0" } -UseBasicParsing
+        $json = $response.Content | ConvertFrom-Json
+        $fileCount = ($json.tree | Where-Object { $_.type -eq "blob" }).Count
+        return $fileCount
+    } catch {
+        Write-Output "Error retrieving file count from GitHub: $_"
+        return $null
+    }
+}
+
 # Download Zip
 try {
-    Invoke-WebRequest -Uri $repoUrl -OutFile $tempZip
+    Invoke-WebRequest -Uri $repoUrl -OutFile $tempZip -UseBasicParsing
     if (Test-Path $tempZip) {
         Write-Output "Downloaded zip successfully: $tempZip"
+        # Get expected file count from GitHub only after successful download
+        $expectedFileCount = Get-GitHubFileCount
+        if ($null -ne $expectedFileCount) {
+            Write-Output "Expected to extract $expectedFileCount files."
+        }
     } else {
         Write-Output "Failed to download the zip."
         exit
@@ -58,22 +77,14 @@ catch {
     exit
 }
 
-# Function to count files in the GitHub repo (using GitHub API)
-function Get-GitHubFileCount {
-    $apiUrl = "https://api.github.com/repos/lookmomnohands/laughing-chainsaw/git/trees/main"
-    $response = Invoke-WebRequest -Uri $apiUrl -Headers @{ "User-Agent" = "Mozilla/5.0" }
-    $files = ($response.files | Measure-Object).Count
-    return $files
-}
-
-# Get expected file count from GitHub
-$expectedFileCount = Get-GitHubFileCount
-Write-Output "Expected to extract $expectedFileCount files."
-
-# Extract Zip
+# Extract Zip to temp folder
+$extractTempFolder = "C:\temp\startmenutweaks_extracted"
 try {
-    Expand-Archive -Path $tempZip -DestinationPath $destinationFolder -Force
-    Write-Output "Successfully extracted the zip archive."
+    if (Test-Path $extractTempFolder) {
+        Remove-Item -Path $extractTempFolder -Recurse -Force
+    }
+    Expand-Archive -Path $tempZip -DestinationPath $extractTempFolder -Force
+    Write-Output "Successfully extracted the zip archive to $extractTempFolder."
 }
 catch {
     Write-Output "Error during extraction: $_"
@@ -81,12 +92,74 @@ catch {
 }
 
 # Count the number of files extracted after extraction
-$extractedFileCount = (Get-ChildItem -Path $destinationFolder -Recurse | Measure-Object -Property Length -Sum).Count
+$repoFolder = Get-ChildItem -Path $extractTempFolder | Where-Object { $_.PSIsContainer } | Select-Object -First 1
+if ($null -eq $repoFolder) {
+    Write-Output "Could not find extracted repo folder."
+    exit
+}
+$extractedFileCount = (Get-ChildItem -Path $repoFolder.FullName -Recurse | Measure-Object -Property Length -Sum).Count
 Write-Output "Extracted $extractedFileCount files."
+
+# Exclusion array for files not to move
+$excludeNames = @("LICENSE", "README.md", "wgetStartMenus.ps1")
+
+# Helper function to recursively move and merge directories
+function Move-Merge-Directory {
+    param (
+        [string]$Source,
+        [string]$Destination
+    )
+    if (-not (Test-Path $Destination)) {
+        New-Item -Path $Destination -ItemType Directory -Force | Out-Null
+    }
+    Get-ChildItem -Path $Source | ForEach-Object {
+        $childDest = Join-Path -Path $Destination -ChildPath $_.Name
+        if ($_.PSIsContainer) {
+            Move-Merge-Directory -Source $_.FullName -Destination $childDest
+        } else {
+            Move-Item -Path $_.FullName -Destination $childDest -Force
+            # Mark touched.txt as hidden after move
+            if ($_.Name -eq "touched.txt") {
+                Set-ItemProperty -Path $childDest -Name Attributes -Value ([System.IO.FileAttributes]::Hidden)
+            }
+        }
+    }
+    # Remove source directory if empty
+    if ((Get-ChildItem -Path $Source).Count -eq 0) {
+        Remove-Item -Path $Source -Force
+    }
+}
+
+# Move files/folders to C:\ if the count matches
+if ($expectedFileCount -eq $extractedFileCount) {
+    Write-Output "File count matches. Moving files to C:\."
+    Get-ChildItem -Path $repoFolder.FullName | ForEach-Object {
+        if ($excludeNames -contains $_.Name) {
+            return
+        }
+        $dest = Join-Path -Path $destinationFolder -ChildPath $_.Name
+        if ($_.PSIsContainer) {
+            Move-Merge-Directory -Source $_.FullName -Destination $dest
+        } else {
+            Move-Item -Path $_.FullName -Destination $dest -Force
+            if ($_.Name -eq "touched.txt") {
+                Set-ItemProperty -Path $dest -Name Attributes -Value ([System.IO.FileAttributes]::Hidden)
+            }
+        }
+    }
+    # Delete the extracted repo folder if empty
+    if ((Get-ChildItem -Path $repoFolder.FullName).Count -eq 0) {
+        Remove-Item -Path $repoFolder.FullName -Force
+    }
+    # Remove any remaining empty folders in temp (one-liner, no function needed)
+    Get-ChildItem -Path $extractTempFolder -Directory -Recurse | Where-Object { @(Get-ChildItem -Path $_.FullName -Force).Count -eq 0 } | Remove-Item -Force
+} else {
+    Write-Output "File count mismatch. Not moving files."
+}
 
 # Download the latest HP Image Assistant URL dynamically
 function Get-LatestHPInstallerUrl {
-    $htmlContent = Invoke-WebRequest -Uri $sourceHPInstallerUrl
+    $htmlContent = Invoke-WebRequest -Uri $sourceHPInstallerUrl -UseBasicParsing
     $latestUrl = ($htmlContent.Links | Where-Object { $_.href -like "*hp-hpia-*.exe" } | Select-Object -Last 1).href
     return $latestUrl
 }
@@ -97,7 +170,7 @@ try {
     $hpInstallerFileName = Split-Path -Path $hpInstallerUrl -Leaf
     $hpInstallerOutputPath = Join-Path -Path "C:\temp" -ChildPath $hpInstallerFileName
 
-    Invoke-WebRequest -Uri $hpInstallerUrl -OutFile $hpInstallerOutputPath
+    Invoke-WebRequest -Uri $hpInstallerUrl -OutFile $hpInstallerOutputPath -UseBasicParsing
     Write-Output "Downloaded HP Image Assistant to: $hpInstallerOutputPath."
 }
 catch {
@@ -108,7 +181,7 @@ catch {
 # Run the executable silently
 if (Test-Path $hpInstallerOutputPath) {
     try {
-        Start-Process -FilePath $hpInstallerOutputPath -ArgumentList "/silent" -Wait
+        Start-Process -FilePath $hpInstallerOutputPath -ArgumentList "/s /e"
         Write-Output "HP Image Assistant installed silently."
     }
     catch {
